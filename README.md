@@ -1,4 +1,4 @@
-# Candor README
+# Candor
 
 Candor is a journaling app built around conversational reflection, continuity across sessions, and closure. It keeps track of who you are and what you've been working through.
 
