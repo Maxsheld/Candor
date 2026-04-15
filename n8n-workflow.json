@@ -1,0 +1,323 @@
+{
+  "name": "Candor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f0e61263-14f2-4b33-837a-416bebeda927",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -96,
+        96
+      ],
+      "id": "c31921c4-1e4b-4ed2-9fbb-59ead24deb98",
+      "name": "Webhook",
+      "webhookId": "f0e61263-14f2-4b33-837a-416bebeda927"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "user_profiles",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $('Joining transcript').item.json.user_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        576,
+        96
+      ],
+      "id": "6cefcd91-555b-4297-9d7e-b4ff902bc310",
+      "name": "Get profile",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HL6eTBKyzg3gRV0B",
+          "name": "Reflective AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "messages",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.conversation_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        128,
+        96
+      ],
+      "id": "21c13d41-5c04-45fc-b056-37513f2d41dc",
+      "name": "Get messages",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HL6eTBKyzg3gRV0B",
+          "name": "Reflective AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const messages = $input.all();\nconst transcriptText = messages.map(item => `${item.json.role.toUpperCase()}: ${item.json.content}`).join('\\n\\n');\n\nreturn [{\n    json: {\n        conversation_id: messages[0].json.conversation_id, // Pass the ID forward\n        user_id: $('Webhook').first().json.body.user_id,\n        transcript: transcriptText\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        96
+      ],
+      "id": "ae9821c2-5f12-450f-bc4a-f30650e54e95",
+      "name": "Joining transcript"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "user_profiles",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Joining transcript').item.json.user_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "profile_json",
+              "fieldValue": "={{ JSON.parse($json.content.parts[0].text) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        0
+      ],
+      "id": "4d8cc1cb-fc0d-4bc7-80b2-eb85fbeaaa16",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HL6eTBKyzg3gRV0B",
+          "name": "Reflective AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "session_summaries",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "conversation_id",
+              "fieldValue": "={{ $('Joining transcript').item.json.conversation_id }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Joining transcript').item.json.user_id }}"
+            },
+            {
+              "fieldId": "summary_text",
+              "fieldValue": "={{ $json.content.parts[0].text }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        192
+      ],
+      "id": "3639d525-fab0-4344-a4af-0c6f57bb397a",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HL6eTBKyzg3gRV0B",
+          "name": "Reflective AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=**TODAY_DATE:** {{$now}}\n\n**EXISTING PROFILE:** \n{{ JSON.stringify($json.profile_json)}}\n\n**TRANSCRIPT:**\n {{ $('Joining transcript').item.json.transcript }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "=You are a backend state-management agent for an AI reflection application.\nYour sole function is to read a conversation transcript and output an updated Core Profile JSON.\n\nINPUTS PROVIDED TO YOU:\n1. TODAY_DATE: [Injected by n8n]\n2. EXISTING_PROFILE: The user's current JSON profile state.\n3. TRANSCRIPT: The just-ended reflection session.\n\nOUTPUT RULES:\n- Output ONLY valid JSON. No markdown fences, no commentary, no explanation.\n- Merge, do not overwrite. Preserve existing data unless the transcript gives explicit grounds to change it.\n- All character limits are hard limits. Truncate elegantly if needed.\n- Never include instruction text, comments, or metadata in the output JSON.\n\nFIELD RULES:\n\nbaseline_identity (max 300 chars):\nA compressed narrative of the user's current life position — roles, major transitions, and the core tension shaping their present chapter. Only update if the transcript reveals a major life shift (job change, relocation, significant relationship change). Otherwise, copy the existing value exactly.\n\ncurrent_focus.topic (max 150 chars):\nThe primary friction shaping the user's present moment, written with emotional texture — not just a topic label. Bad: \"career transition.\" Good: \"career transition, using over-research as a shield against the fear of public failure.\" Update every session.\n\ncurrent_focus.sessions_active:\nIf the user is wrestling with the same core friction as in the existing profile, increment by 1. If the transcript introduces an entirely new core friction, rewrite topic and reset to 1.\n\nkey_entities (max 8 entries):\nA minimal relational map of people, projects, or recurring external elements that meaningfully shape the user's experience.\n- Before adding or updating, evaluate every existing entity against TODAY_DATE. Silently delete any entry where last_mentioned is 60+ days ago.\n- If the user explicitly mentions an entity in the transcript, update last_mentioned to TODAY_DATE and update current_state if anything has changed.\n- If a new entity warrants addition and the list already has 8 entries after pruning, drop the entry with the oldest last_mentioned date to make room.\n\nField limits: name max 40 chars, relation max 60 chars, current_state max 80 chars, last_mentioned ISO date string.\n\nkey_insights (max 5 entries, max 150 chars each):\nGenuine breakthroughs only — moments where something clearly shifted, not interesting observations. If a new insight is earned and the list is full, delete the least impactful existing entry to make room. Do not add an insight unless the transcript clearly supports it.\n\nunresolved_commitments (max 4 entries, max 120 chars each):\nSpecific actions the user committed to, or questions explicitly left open at session end.\n- REMOVE if the user clearly completed it this session.\n- REMOVE if the user explicitly abandoned it and named a reason.\n- KEEP if the user mentioned it but did not resolve it — this is still unresolved.\n- ADD new commitments or open questions from this session.\n- Do not remove a commitment simply because it wasn't mentioned — silence is not resolution."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        0
+      ],
+      "id": "0bcbaf3b-08ad-4831-b3f4-4b48773433a9",
+      "name": "Profile Updater",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "CL0BZ0byuWPhLBW0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=**Session Transcript:**\n\n {{ $('Joining transcript').item.json.transcript }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "=You are the continuity engine for an AI reflection tool. \nYour job is to read a conversation transcript and distill it into a dense, highly actionable summary.\n\nThis summary will be injected into the system prompt of the user's NEXT session. It must provide the next AI with the exact context needed to pick up the psychological thread without missing a beat.\n\nDO NOT summarize conversational pleasantries.\nDO NOT use phrases like \"The user discussed...\" or \"The AI suggested...\"\n\nWrite a single, dense paragraph (Max 200 words) covering:\n1. The Core Tension: What was the actual, underlying friction the user was wrestling with?\n2. The Resistance: What were they avoiding or blind to?\n3. The Landing Point: Where did the session end? (Did they reach clarity, commit to an action, or end in ambiguity?)\n\nExample output:\nUser is paralyzed by over-researching a career pivot to AI automation, using \"preparation\" as a shield against the fear of public failure. Defended their lack of action by claiming they need a 'perfect portfolio.' Session ended with a reluctant acknowledgment that their standards are a delay tactic. Unresolved: Will they actually publish the imperfect Project 1 draft this week, or find another excuse to iterate?\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        192
+      ],
+      "id": "437c9063-7020-4e68-a2a1-6289c83fbd2d",
+      "name": "Summary Generator",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "CL0BZ0byuWPhLBW0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get profile": {
+      "main": [
+        [
+          {
+            "node": "Summary Generator",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Profile Updater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get messages": {
+      "main": [
+        [
+          {
+            "node": "Joining transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Joining transcript": {
+      "main": [
+        [
+          {
+            "node": "Get profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile Updater": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Generator": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "35b6724a-a5e4-499a-9aa8-9e7f75982573",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bbbabf6c8d01f1fff73e6b2ac9931bfc10cb56895631e684dbaa0924fce739ac"
+  },
+  "id": "ArUEQiPI6yKbbDG0",
+  "tags": []
+}
