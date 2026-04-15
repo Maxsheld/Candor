@@ -6,7 +6,7 @@ The goal was to build something more deliberate: a place to think through someth
 
 ## Demo
 
-- Loom walkthrough: Coming soon!
+[Watch the demo here](https://www.loom.com/share/3767dd12b69f46d193a599bff2487d6d)
 
 ## Why I built it this way
 
